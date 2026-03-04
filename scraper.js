@@ -149,20 +149,34 @@ async function validateSession(sessionDir) {
  */
 async function extractMemberData(page, memberCard) {
   try {
-    // Extract all text content from the member card
+    // Extract all data from the member card
     const memberData = await memberCard.evaluate((card) => {
       // Get all text spans with class f1 (Facebook's text class)
       const textSpans = Array.from(card.querySelectorAll('span.f1'));
-      
+
       // First span is typically the name
       const name = textSpans[0]?.textContent?.trim() || null;
-      
+
       // Second span is typically work/school info
       const work = textSpans[1]?.textContent?.trim() || null;
+
+      // Get the data-action-id to construct profile URL
+      // Facebook member cards have data-action-id which is the user ID
+      const actionId = card.getAttribute('data-action-id');
       
-      // Get profile link from the card's href or parent link
-      const linkElement = card.closest('a[href]') || card.querySelector('a[href]');
-      const profileUrl = linkElement?.href || null;
+      // Construct profile URL from action ID if available
+      let profileUrl = null;
+      if (actionId) {
+        profileUrl = `https://www.facebook.com/${actionId}`;
+      }
+
+      // Also try to find any link inside the card
+      if (!profileUrl) {
+        const linkElement = card.querySelector('a[href*="facebook.com"]');
+        if (linkElement && linkElement.href) {
+          profileUrl = linkElement.href;
+        }
+      }
 
       return {
         name,
@@ -223,13 +237,20 @@ async function randomDelay(min, max) {
  * @returns {Promise<number>} Total number of scroll actions performed
  */
 async function scrollThroughMembers(page, options = {}) {
-  const { maxScrolls = 50, scrollDelay = 2000 } = options;
+  const { maxScrolls = 100, scrollDelay = 3000, minWaitAfterNoChange = 5000 } = options;
   let scrollCount = 0;
-  let lastHeight = await page.evaluate(() => document.body.scrollHeight);
+  let lastMemberCount = 0;
   let consecutiveNoChange = 0;
-  const maxConsecutiveNoChange = 3;
+  const maxConsecutiveNoChange = 5;
 
   console.log('Starting member list scroll...');
+
+  // Get initial member count
+  lastMemberCount = await page.evaluate((selector) => {
+    return document.querySelectorAll(selector).length;
+  }, SELECTORS.MEMBER_CARD);
+
+  console.log(`Initial member count: ${lastMemberCount}`);
 
   while (scrollCount < maxScrolls) {
     // Scroll to bottom
@@ -243,20 +264,40 @@ async function scrollThroughMembers(page, options = {}) {
     // Wait for content to load
     await delay(scrollDelay);
 
-    // Check new height
-    const newHeight = await page.evaluate(() => document.body.scrollHeight);
+    // Check member count instead of page height
+    const currentMemberCount = await page.evaluate((selector) => {
+      return document.querySelectorAll(selector).length;
+    }, SELECTORS.MEMBER_CARD);
 
-    if (newHeight === lastHeight) {
+    console.log(`Member count: ${currentMemberCount}`);
+
+    if (currentMemberCount === lastMemberCount) {
       consecutiveNoChange++;
-      console.log(`No new content loaded (${consecutiveNoChange}/${maxConsecutiveNoChange})`);
-
-      if (consecutiveNoChange >= maxConsecutiveNoChange) {
-        console.log('End of member list detected.');
-        break;
+      console.log(`No new members loaded (${consecutiveNoChange}/${maxConsecutiveNoChange}). Waiting ${minWaitAfterNoChange}ms...`);
+      
+      // Wait longer before giving up
+      await delay(minWaitAfterNoChange);
+      
+      // Check one more time after waiting
+      const retryCount = await page.evaluate((selector) => {
+        return document.querySelectorAll(selector).length;
+      }, SELECTORS.MEMBER_CARD);
+      
+      if (retryCount === lastMemberCount) {
+        consecutiveNoChange++;
+        console.log(`Still no new members after waiting (${consecutiveNoChange}/${maxConsecutiveNoChange})`);
+        
+        if (consecutiveNoChange >= maxConsecutiveNoChange) {
+          console.log('End of member list detected.');
+          break;
+        }
+      } else {
+        consecutiveNoChange = 0;
+        lastMemberCount = retryCount;
       }
     } else {
       consecutiveNoChange = 0;
-      lastHeight = newHeight;
+      lastMemberCount = currentMemberCount;
     }
   }
 
