@@ -40,6 +40,12 @@ describe('Configuration Constants', () => {
       expect(SELECTORS.MEMBER_CARD.length).toBeGreaterThan(0);
     });
 
+    test('should have NAME_CONTAINER defined as a non-empty string', () => {
+      expect(SELECTORS.NAME_CONTAINER).toBeDefined();
+      expect(typeof SELECTORS.NAME_CONTAINER).toBe('string');
+      expect(SELECTORS.NAME_CONTAINER.length).toBeGreaterThan(0);
+    });
+
     test('should have NAME defined as a non-empty string', () => {
       expect(SELECTORS.NAME).toBeDefined();
       expect(typeof SELECTORS.NAME).toBe('string');
@@ -56,6 +62,12 @@ describe('Configuration Constants', () => {
       expect(SELECTORS.PROFILE_LINK).toBeDefined();
       expect(typeof SELECTORS.PROFILE_LINK).toBe('string');
       expect(SELECTORS.PROFILE_LINK.length).toBeGreaterThan(0);
+    });
+
+    test('should have AVATAR_IMG defined as a non-empty string', () => {
+      expect(SELECTORS.AVATAR_IMG).toBeDefined();
+      expect(typeof SELECTORS.AVATAR_IMG).toBe('string');
+      expect(SELECTORS.AVATAR_IMG.length).toBeGreaterThan(0);
     });
   });
 

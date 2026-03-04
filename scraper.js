@@ -31,6 +31,12 @@ const CONFIG = {
  * DOM selectors for Facebook mobile site
  * Note: These selectors are for Facebook's mobile interface and may need
  * updates if Facebook changes their DOM structure.
+ * 
+ * Based on DOM inspection (2026-03-04):
+ * - Member cards are containers with data-focusable and data-action-id attributes
+ * - Names are in span.f1 inside ServerTextArea with color #1d2129
+ * - Work details are in span.f1 inside ServerTextArea with color #4b4f56
+ * 
  * @constant {Object} SELECTORS
  * @property {string} MEMBER_CARD - Selector for member card container
  * @property {string} NAME - Selector for member name element
@@ -38,10 +44,12 @@ const CONFIG = {
  * @property {string} PROFILE_LINK - Selector for profile link element
  */
 const SELECTORS = {
-  MEMBER_CARD: '[data-testid="member-cell"]',
-  NAME: 'span[dir="auto"]',
-  WORK_DETAILS: '[data-testid="profile_subtitle"]',
-  PROFILE_LINK: 'a[href*="/"]'
+  MEMBER_CARD: '[data-focusable="true"][data-action-id]',
+  NAME_CONTAINER: '[data-mcomponent="ServerTextArea"]',
+  NAME: '[data-mcomponent="ServerTextArea"]:first-of-type span.f1',
+  WORK_DETAILS: '[data-mcomponent="ServerTextArea"]:nth-of-type(2) span.f1',
+  PROFILE_LINK: '[data-focusable="true"][data-action-id]',
+  AVATAR_IMG: '[data-mcomponent="ServerImageArea"] img'
 };
 
 /**
