@@ -22,14 +22,14 @@
 
 ## Phase 2: Core Scraping Logic
 
-- [ ] Task: Inspect Facebook DOM and discover selectors
-    - [ ] Create `dom-inspector.js` script
-    - [ ] Launch browser with existing session
-    - [ ] Navigate to a Facebook group member list
-    - [ ] Programmatically explore DOM structure
-    - [ ] Identify selectors for: member cards, names, work details, profile links
-    - [ ] Log discovered HTML structure to console/file
-    - [ ] Document final selectors in `scraper.js` constants
+- [x] Task: Inspect Facebook DOM and discover selectors (22a2148)
+    - [x] Create `dom-inspector.js` script
+    - [x] Launch browser with existing session
+    - [x] Navigate to a Facebook group member list
+    - [x] Programmatically explore DOM structure
+    - [x] Identify selectors for: member cards, names, work details, profile links
+    - [x] Log discovered HTML structure to console/file
+    - [x] Document final selectors in `scraper.js` constants
 - [ ] Task: Implement member extraction function
     - [ ] Create `extractMemberData(page)` function
     - [ ] Parse member name from DOM
