@@ -2,14 +2,14 @@
 
 ## Phase 1: Foundation & Setup
 
-- [ ] Task: Create project structure and main scraper file
-    - [ ] Create `scraper.js` with module exports
-    - [ ] Define configuration constants (selectors, delays, output file)
-    - [ ] Add JSDoc documentation for all public functions
-- [ ] Task: Write tests for configuration and constants
-    - [ ] Create `test/scraper.test.js` with Jest or Node assert
-    - [ ] Test configuration values are correctly defined
-    - [ ] Test selector constants are valid strings
+- [x] Task: Create project structure and main scraper file (a9e6e0a)
+    - [x] Create `scraper.js` with module exports
+    - [x] Define configuration constants (selectors, delays, output file)
+    - [x] Add JSDoc documentation for all public functions
+- [x] Task: Write tests for configuration and constants (a9e6e0a)
+    - [x] Create `test/scraper.test.js` with Jest or Node assert
+    - [x] Test configuration values are correctly defined
+    - [x] Test selector constants are valid strings
 - [ ] Task: Implement session validation function
     - [ ] Create `validateSession()` function
     - [ ] Check if session directory exists
