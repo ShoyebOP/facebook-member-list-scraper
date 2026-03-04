@@ -1,4 +1,4 @@
-const { CONFIG, SELECTORS, validateConfig } = require('../scraper');
+const { CONFIG, SELECTORS, validateConfig, validateSession } = require('../scraper');
 
 describe('Configuration Constants', () => {
   describe('CONFIG', () => {
@@ -174,6 +174,71 @@ describe('Configuration Constants', () => {
         SESSION_DIR: './my_facebook_session'
       };
       expect(validateConfig(invalidConfig)).toBe(false);
+    });
+  });
+});
+
+describe('validateSession', () => {
+  const fs = require('fs');
+  const path = require('path');
+
+  afterEach(() => {
+    // Clean up test directories if they exist
+    const testDir = './test_session';
+    if (fs.existsSync(testDir)) {
+      fs.rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+
+  describe('when session directory does not exist', () => {
+    test('should return false with error message for missing directory', async () => {
+      const result = await validateSession('./nonexistent_directory_12345');
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('not found');
+    });
+  });
+
+  describe('when session directory exists', () => {
+    test('should return true when session directory exists', async () => {
+      const testDir = './test_session';
+      fs.mkdirSync(testDir, { recursive: true });
+      
+      const result = await validateSession(testDir);
+      expect(result.valid).toBe(true);
+      expect(result.error).toBeUndefined();
+    });
+
+    test('should return true with cookies info when Cookies file exists', async () => {
+      const testDir = './test_session';
+      fs.mkdirSync(testDir, { recursive: true });
+      fs.writeFileSync(path.join(testDir, 'Cookies'), 'test cookie data');
+      
+      const result = await validateSession(testDir);
+      expect(result.valid).toBe(true);
+      expect(result.hasCookies).toBe(true);
+    });
+
+    test('should return true with cookies info when Cookies file does not exist', async () => {
+      const testDir = './test_session';
+      fs.mkdirSync(testDir, { recursive: true });
+      
+      const result = await validateSession(testDir);
+      expect(result.valid).toBe(true);
+      expect(result.hasCookies).toBe(false);
+    });
+  });
+
+  describe('when session directory path is invalid', () => {
+    test('should return false when path is null', async () => {
+      const result = await validateSession(null);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Invalid');
+    });
+
+    test('should return false when path is empty string', async () => {
+      const result = await validateSession('');
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Invalid');
     });
   });
 });

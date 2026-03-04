@@ -7,6 +7,9 @@
  * @module scraper
  */
 
+const fs = require('fs');
+const path = require('path');
+
 /**
  * Configuration constants for the scraper
  * @constant {Object} CONFIG
@@ -79,8 +82,53 @@ function validateConfig(config) {
   return true;
 }
 
+/**
+ * Validates Facebook session directory
+ * @param {string} sessionDir - Path to the browser session directory
+ * @returns {Promise<Object>} Validation result with valid status and optional error message
+ * @property {boolean} valid - True if session directory is valid
+ * @property {string} [error] - Error message if validation failed
+ * @property {boolean} [hasCookies] - True if Cookies file exists in session directory
+ */
+async function validateSession(sessionDir) {
+  // Validate input
+  if (!sessionDir || typeof sessionDir !== 'string' || sessionDir.length === 0) {
+    return {
+      valid: false,
+      error: 'Invalid session directory path provided'
+    };
+  }
+  
+  // Check if directory exists
+  if (!fs.existsSync(sessionDir)) {
+    return {
+      valid: false,
+      error: `Session directory not found: ${sessionDir}`
+    };
+  }
+  
+  // Check if it's actually a directory
+  const stats = fs.statSync(sessionDir);
+  if (!stats.isDirectory()) {
+    return {
+      valid: false,
+      error: `Path is not a directory: ${sessionDir}`
+    };
+  }
+  
+  // Check for Cookies file (Chromium/Chrome session data)
+  const cookiesPath = path.join(sessionDir, 'Cookies');
+  const hasCookies = fs.existsSync(cookiesPath);
+  
+  return {
+    valid: true,
+    hasCookies
+  };
+}
+
 module.exports = {
   CONFIG,
   SELECTORS,
-  validateConfig
+  validateConfig,
+  validateSession
 };
