@@ -10,14 +10,14 @@
     - [x] Create `test/scraper.test.js` with Jest or Node assert
     - [x] Test configuration values are correctly defined
     - [x] Test selector constants are valid strings
-- [ ] Task: Implement session validation function
-    - [ ] Create `validateSession()` function
-    - [ ] Check if session directory exists
-    - [ ] Verify Facebook cookies are present
-- [ ] Task: Write tests for session validation
-    - [ ] Test with valid session directory
-    - [ ] Test with missing session directory
-    - [ ] Test with corrupted session data
+- [x] Task: Implement session validation function (7a0ed22)
+    - [x] Create `validateSession()` function
+    - [x] Check if session directory exists
+    - [x] Verify Facebook cookies are present
+- [x] Task: Write tests for session validation (7a0ed22)
+    - [x] Test with valid session directory
+    - [x] Test with missing session directory
+    - [x] Test with corrupted session data
 - [ ] Task: Conductor - User Manual Verification 'Foundation & Setup' (Protocol in workflow.md)
 
 ## Phase 2: Core Scraping Logic
