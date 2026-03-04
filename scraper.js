@@ -160,21 +160,36 @@ async function extractMemberData(page, memberCard) {
       // Second span is typically work/school info
       const work = textSpans[1]?.textContent?.trim() || null;
 
-      // Get the data-action-id to construct profile URL
-      // Facebook member cards have data-action-id which is the user ID
-      const actionId = card.getAttribute('data-action-id');
-      
-      // Construct profile URL from action ID if available
+      // Find the profile link - look for anchor tags with href containing /profile.php or user IDs
       let profileUrl = null;
-      if (actionId) {
-        profileUrl = `https://www.facebook.com/${actionId}`;
+      
+      // Strategy 1: Look for any link that points to a Facebook profile
+      const allLinks = Array.from(card.querySelectorAll('a[href]'));
+      for (const link of allLinks) {
+        const href = link.href;
+        // Skip non-profile links
+        if (href.includes('facebook.com') && 
+            !href.includes('#') &&
+            !href.includes('privacy') &&
+            !href.includes('settings')) {
+          // Check if it looks like a profile URL
+          if (href.includes('/profile.php') || 
+              href.match(/facebook\.com\/\d+/) ||
+              href.match(/facebook\.com\/[a-zA-Z0-9.]+$/)) {
+            profileUrl = href;
+            break;
+          }
+        }
       }
 
-      // Also try to find any link inside the card
+      // Strategy 2: If the card itself has a clickable area, get its onclick or data
       if (!profileUrl) {
-        const linkElement = card.querySelector('a[href*="facebook.com"]');
-        if (linkElement && linkElement.href) {
-          profileUrl = linkElement.href;
+        // Check for any data attributes that might contain user info
+        const userId = card.getAttribute('data-ownerid') || 
+                       card.getAttribute('data-id') ||
+                       card.getAttribute('data-entityid');
+        if (userId) {
+          profileUrl = `https://www.facebook.com/${userId}`;
         }
       }
 
@@ -232,18 +247,20 @@ async function randomDelay(min, max) {
 
 /**
  * Scrolls through member list to load all members
+ * Uses up/down scrolling strategy to trigger lazy loading
  * @param {Object} page - Puppeteer page object
  * @param {Object} options - Scroll options
  * @returns {Promise<number>} Total number of scroll actions performed
  */
 async function scrollThroughMembers(page, options = {}) {
-  const { maxScrolls = 100, scrollDelay = 3000, minWaitAfterNoChange = 5000 } = options;
+  const { maxScrolls = 200, scrollDelay = 2000, minWaitAfterNoChange = 8000 } = options;
   let scrollCount = 0;
   let lastMemberCount = 0;
   let consecutiveNoChange = 0;
-  const maxConsecutiveNoChange = 5;
+  const maxConsecutiveNoChange = 8;
+  let scrollDirection = 'down';
 
-  console.log('Starting member list scroll...');
+  console.log('Starting member list scroll (up/down strategy)...');
 
   // Get initial member count
   lastMemberCount = await page.evaluate((selector) => {
@@ -253,54 +270,77 @@ async function scrollThroughMembers(page, options = {}) {
   console.log(`Initial member count: ${lastMemberCount}`);
 
   while (scrollCount < maxScrolls) {
-    // Scroll to bottom
-    await page.evaluate(() => {
-      window.scrollTo(0, document.body.scrollHeight);
-    });
-
     scrollCount++;
-    console.log(`Scrolled ${scrollCount}/${maxScrolls} times...`);
+    
+    if (scrollDirection === 'down') {
+      // Scroll to bottom
+      await page.evaluate(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+      });
+      console.log(`Scroll ${scrollCount}/${maxScrolls}: Bottom (members: ${lastMemberCount})`);
+    } else {
+      // Scroll to top
+      await page.evaluate(() => {
+        window.scrollTo(0, 0);
+      });
+      console.log(`Scroll ${scrollCount}/${maxScrolls}: Top (members: ${lastMemberCount})`);
+    }
 
     // Wait for content to load
     await delay(scrollDelay);
 
-    // Check member count instead of page height
+    // Check member count
     const currentMemberCount = await page.evaluate((selector) => {
       return document.querySelectorAll(selector).length;
     }, SELECTORS.MEMBER_CARD);
 
-    console.log(`Member count: ${currentMemberCount}`);
-
-    if (currentMemberCount === lastMemberCount) {
+    if (currentMemberCount > lastMemberCount) {
+      console.log(`  +${currentMemberCount - lastMemberCount} new members loaded`);
+      consecutiveNoChange = 0;
+      lastMemberCount = currentMemberCount;
+      // Keep scrolling in same direction when making progress
+    } else if (currentMemberCount === lastMemberCount) {
       consecutiveNoChange++;
-      console.log(`No new members loaded (${consecutiveNoChange}/${maxConsecutiveNoChange}). Waiting ${minWaitAfterNoChange}ms...`);
       
-      // Wait longer before giving up
-      await delay(minWaitAfterNoChange);
+      if (consecutiveNoChange >= 3 && scrollDirection === 'down') {
+        // Switch direction to try loading more
+        console.log(`  No new members, switching direction...`);
+        scrollDirection = 'up';
+        consecutiveNoChange = 0;
+      } else if (consecutiveNoChange >= 3 && scrollDirection === 'up') {
+        // Switch back to down
+        console.log(`  No new members, switching direction...`);
+        scrollDirection = 'down';
+        consecutiveNoChange = 0;
+      }
       
-      // Check one more time after waiting
-      const retryCount = await page.evaluate((selector) => {
-        return document.querySelectorAll(selector).length;
-      }, SELECTORS.MEMBER_CARD);
-      
-      if (retryCount === lastMemberCount) {
-        consecutiveNoChange++;
-        console.log(`Still no new members after waiting (${consecutiveNoChange}/${maxConsecutiveNoChange})`);
+      if (consecutiveNoChange >= maxConsecutiveNoChange) {
+        // Wait longer before final check
+        console.log(`  Waiting ${minWaitAfterNoChange}ms for final check...`);
+        await delay(minWaitAfterNoChange);
         
-        if (consecutiveNoChange >= maxConsecutiveNoChange) {
+        const finalCount = await page.evaluate((selector) => {
+          return document.querySelectorAll(selector).length;
+        }, SELECTORS.MEMBER_CARD);
+        
+        if (finalCount === lastMemberCount) {
           console.log('End of member list detected.');
           break;
+        } else {
+          console.log(`  +${finalCount - lastMemberCount} new members loaded after wait`);
+          lastMemberCount = finalCount;
+          consecutiveNoChange = 0;
         }
-      } else {
-        consecutiveNoChange = 0;
-        lastMemberCount = retryCount;
       }
     } else {
+      // Count decreased (shouldn't happen), reset
+      console.log(`  Member count decreased, resetting...`);
       consecutiveNoChange = 0;
       lastMemberCount = currentMemberCount;
     }
   }
 
+  console.log(`Scroll complete. Total members: ${lastMemberCount}`);
   return scrollCount;
 }
 
@@ -389,14 +429,13 @@ async function runScraper(groupUrl, options = {}) {
       const memberData = await extractMemberData(page, card);
       if (memberData) {
         members.push(memberData);
-        console.log(`  Extracted: ${memberData.name}${memberData.work ? ` - ${memberData.work}` : ''}`);
       }
     }
 
-    console.log(`\n✓ Extracted ${members.length} members`);
+    console.log(`✓ Extracted ${members.length} members`);
 
     // Export to JSON
-    console.log('\nExporting data...');
+    console.log('Exporting data...');
     await exportToJSON(members, outputfile, groupUrl);
 
   } catch (error) {
