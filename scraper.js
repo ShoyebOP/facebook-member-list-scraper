@@ -127,16 +127,62 @@ async function validateSession(sessionDir) {
   // Check for Cookies file (Chromium/Chrome session data)
   const cookiesPath = path.join(sessionDir, 'Cookies');
   const hasCookies = fs.existsSync(cookiesPath);
-  
+
   return {
     valid: true,
     hasCookies
   };
 }
 
+/**
+ * Extracts member data from a member card element
+ * @param {Object} page - Puppeteer page object
+ * @param {ElementHandle} memberCard - Puppeteer element handle for member card
+ * @returns {Promise<Object|null>} Member data object or null if extraction fails
+ * @property {string} name - Member's display name
+ * @property {string|null} work - Work/employment details (may be null)
+ * @property {string|null} profileUrl - Facebook profile URL (may be null)
+ */
+async function extractMemberData(page, memberCard) {
+  try {
+    // Extract all text content from the member card
+    const memberData = await memberCard.evaluate((card) => {
+      // Get all text spans with class f1 (Facebook's text class)
+      const textSpans = Array.from(card.querySelectorAll('span.f1'));
+      
+      // First span is typically the name
+      const name = textSpans[0]?.textContent?.trim() || null;
+      
+      // Second span is typically work/school info
+      const work = textSpans[1]?.textContent?.trim() || null;
+      
+      // Get profile link from the card's href or parent link
+      const linkElement = card.closest('a[href]') || card.querySelector('a[href]');
+      const profileUrl = linkElement?.href || null;
+
+      return {
+        name,
+        work,
+        profileUrl
+      };
+    });
+
+    // Validate that we got at least a name
+    if (!memberData.name) {
+      return null;
+    }
+
+    return memberData;
+  } catch (error) {
+    console.error('Error extracting member data:', error.message);
+    return null;
+  }
+}
+
 module.exports = {
   CONFIG,
   SELECTORS,
   validateConfig,
-  validateSession
+  validateSession,
+  extractMemberData
 };

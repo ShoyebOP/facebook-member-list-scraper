@@ -1,4 +1,4 @@
-const { CONFIG, SELECTORS, validateConfig, validateSession } = require('../scraper');
+const { CONFIG, SELECTORS, validateConfig, validateSession, extractMemberData } = require('../scraper');
 
 describe('Configuration Constants', () => {
   describe('CONFIG', () => {
@@ -251,6 +251,15 @@ describe('validateSession', () => {
       const result = await validateSession('');
       expect(result.valid).toBe(false);
       expect(result.error).toContain('Invalid');
+    });
+  });
+});
+
+describe('extractMemberData', () => {
+  describe('function existence', () => {
+    test('should have extractMemberData function exported', () => {
+      expect(extractMemberData).toBeDefined();
+      expect(typeof extractMemberData).toBe('function');
     });
   });
 });
