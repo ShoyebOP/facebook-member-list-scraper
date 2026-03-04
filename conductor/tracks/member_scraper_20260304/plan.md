@@ -30,12 +30,12 @@
     - [x] Identify selectors for: member cards, names, work details, profile links
     - [x] Log discovered HTML structure to console/file
     - [x] Document final selectors in `scraper.js` constants
-- [ ] Task: Implement member extraction function
-    - [ ] Create `extractMemberData(page)` function
-    - [ ] Parse member name from DOM
-    - [ ] Parse work details from DOM
-    - [ ] Extract and normalize profile URL
-    - [ ] Handle missing fields gracefully
+- [x] Task: Implement member extraction function (e417711)
+    - [x] Create `extractMemberData(page)` function
+    - [x] Parse member name from DOM
+    - [x] Parse work details from DOM
+    - [x] Extract and normalize profile URL
+    - [x] Handle missing fields gracefully
 - [ ] Task: Write tests for member extraction
     - [ ] Create mock page objects with sample HTML
     - [ ] Test extraction with complete member data
