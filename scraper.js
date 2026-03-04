@@ -9,6 +9,10 @@
 
 const fs = require('fs');
 const path = require('path');
+const puppeteer = require('puppeteer');
+const { KnownDevices } = require('puppeteer');
+
+const MOBILE_DEVICE = KnownDevices['Galaxy S8'];
 
 /**
  * Configuration constants for the scraper
@@ -184,5 +188,193 @@ module.exports = {
   SELECTORS,
   validateConfig,
   validateSession,
-  extractMemberData
+  extractMemberData,
+  delay,
+  randomDelay,
+  scrollThroughMembers,
+  exportToJSON,
+  runScraper
 };
+
+/**
+ * Delays execution for specified milliseconds
+ * @param {number} ms - Milliseconds to delay
+ * @returns {Promise<void>}
+ */
+async function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Delays execution for a random duration between min and max
+ * @param {number} min - Minimum milliseconds
+ * @param {number} max - Maximum milliseconds
+ * @returns {Promise<void>}
+ */
+async function randomDelay(min, max) {
+  const randomMs = Math.floor(Math.random() * (max - min + 1)) + min;
+  return delay(randomMs);
+}
+
+/**
+ * Scrolls through member list to load all members
+ * @param {Object} page - Puppeteer page object
+ * @param {Object} options - Scroll options
+ * @returns {Promise<number>} Total number of scroll actions performed
+ */
+async function scrollThroughMembers(page, options = {}) {
+  const { maxScrolls = 50, scrollDelay = 2000 } = options;
+  let scrollCount = 0;
+  let lastHeight = await page.evaluate(() => document.body.scrollHeight);
+  let consecutiveNoChange = 0;
+  const maxConsecutiveNoChange = 3;
+
+  console.log('Starting member list scroll...');
+
+  while (scrollCount < maxScrolls) {
+    // Scroll to bottom
+    await page.evaluate(() => {
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+
+    scrollCount++;
+    console.log(`Scrolled ${scrollCount}/${maxScrolls} times...`);
+
+    // Wait for content to load
+    await delay(scrollDelay);
+
+    // Check new height
+    const newHeight = await page.evaluate(() => document.body.scrollHeight);
+
+    if (newHeight === lastHeight) {
+      consecutiveNoChange++;
+      console.log(`No new content loaded (${consecutiveNoChange}/${maxConsecutiveNoChange})`);
+
+      if (consecutiveNoChange >= maxConsecutiveNoChange) {
+        console.log('End of member list detected.');
+        break;
+      }
+    } else {
+      consecutiveNoChange = 0;
+      lastHeight = newHeight;
+    }
+  }
+
+  return scrollCount;
+}
+
+/**
+ * Exports member data to JSON file
+ * @param {Array} members - Array of member data objects
+ * @param {string} outputPath - Path to output file
+ * @param {string} groupUrl - Source Facebook group URL
+ * @returns {Promise<string>} Path to created file
+ */
+async function exportToJSON(members, outputPath, groupUrl) {
+  const exportData = {
+    group_url: groupUrl,
+    scraped_at: new Date().toISOString(),
+    member_count: members.length,
+    members: members
+  };
+
+  await fs.promises.writeFile(outputPath, JSON.stringify(exportData, null, 2));
+  console.log(`Exported ${members.length} members to ${outputPath}`);
+  
+  return outputPath;
+}
+
+/**
+ * Main scraper orchestration function
+ * @param {string} groupUrl - Facebook group member list URL
+ * @param {Object} options - Scraper options
+ * @returns {Promise<Object>} Scraper result
+ */
+async function runScraper(groupUrl, options = {}) {
+  const {
+    outputfile = CONFIG.OUTPUT_FILE,
+    sessionDir = CONFIG.SESSION_DIR,
+    maxScrolls = 50
+  } = options;
+
+  console.log('=================================================');
+  console.log('Facebook Member List Scraper');
+  console.log('=================================================');
+  console.log(`Target URL: ${groupUrl}`);
+  console.log(`Output File: ${outputfile}`);
+  console.log('=================================================\n');
+
+  // Validate session
+  console.log('Validating session...');
+  const sessionResult = await validateSession(sessionDir);
+  
+  if (!sessionResult.valid) {
+    throw new Error(`Session validation failed: ${sessionResult.error}`);
+  }
+  
+  console.log('✓ Session validated', sessionResult.hasCookies ? '(with cookies)' : '');
+
+  const browser = await puppeteer.launch({
+    headless: false,
+    userDataDir: sessionDir,
+    args: ['--start-maximized']
+  });
+
+  const members = [];
+
+  try {
+    const page = await browser.newPage();
+    await page.emulate(MOBILE_DEVICE);
+
+    console.log('\nNavigating to group member list...');
+    await page.goto(groupUrl, {
+      waitUntil: 'networkidle0',
+      timeout: 120000
+    });
+
+    console.log('✓ Page loaded');
+
+    // Scroll through member list
+    console.log('\nLoading all members...');
+    const scrollCount = await scrollThroughMembers(page, { maxScrolls });
+    console.log(`Completed ${scrollCount} scroll actions`);
+
+    // Extract member data
+    console.log('\nExtracting member data...');
+    const memberCards = await page.$$(SELECTORS.MEMBER_CARD);
+    console.log(`Found ${memberCards.length} member cards`);
+
+    for (const card of memberCards) {
+      const memberData = await extractMemberData(page, card);
+      if (memberData) {
+        members.push(memberData);
+        console.log(`  Extracted: ${memberData.name}${memberData.work ? ` - ${memberData.work}` : ''}`);
+      }
+    }
+
+    console.log(`\n✓ Extracted ${members.length} members`);
+
+    // Export to JSON
+    console.log('\nExporting data...');
+    await exportToJSON(members, outputfile, groupUrl);
+
+  } catch (error) {
+    console.error('\n✗ Error during scraping:', error.message);
+    throw error;
+  } finally {
+    await browser.close();
+  }
+
+  console.log('\n=================================================');
+  console.log('SCRAPING COMPLETE');
+  console.log('=================================================');
+  console.log(`Total members extracted: ${members.length}`);
+  console.log(`Output file: ${outputfile}`);
+  console.log('=================================================\n');
+
+  return {
+    success: true,
+    memberCount: members.length,
+    outputFile: outputfile
+  };
+}
