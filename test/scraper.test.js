@@ -256,10 +256,158 @@ describe('validateSession', () => {
 });
 
 describe('extractMemberData', () => {
-  describe('function existence', () => {
-    test('should have extractMemberData function exported', () => {
-      expect(extractMemberData).toBeDefined();
-      expect(typeof extractMemberData).toBe('function');
+  let mockPage;
+  let mockMemberCard;
+
+  beforeEach(() => {
+    mockPage = {};
+    mockMemberCard = {
+      evaluate: jest.fn()
+    };
+  });
+
+  test('should have extractMemberData function exported', () => {
+    expect(extractMemberData).toBeDefined();
+    expect(typeof extractMemberData).toBe('function');
+  });
+
+  test('should extract member data correctly from complete card', async () => {
+    const mockData = {
+      name: 'John Doe',
+      work: 'Software Engineer at Acme Corp',
+      profileUrl: 'https://www.facebook.com/john.doe'
+    };
+    mockMemberCard.evaluate.mockResolvedValue(mockData);
+
+    const result = await extractMemberData(mockPage, mockMemberCard);
+    
+    expect(result).toEqual(mockData);
+    expect(mockMemberCard.evaluate).toHaveBeenCalled();
+  });
+
+  test('should extract member data with missing work info', async () => {
+    const mockData = {
+      name: 'Jane Smith',
+      work: null,
+      profileUrl: 'https://www.facebook.com/jane.smith'
+    };
+    mockMemberCard.evaluate.mockResolvedValue(mockData);
+
+    const result = await extractMemberData(mockPage, mockMemberCard);
+    
+    expect(result).toEqual(mockData);
+  });
+
+  test('should return null if name is missing', async () => {
+    const mockData = {
+      name: null,
+      work: 'Some job',
+      profileUrl: 'https://www.facebook.com/someone'
+    };
+    mockMemberCard.evaluate.mockResolvedValue(mockData);
+
+    const result = await extractMemberData(mockPage, mockMemberCard);
+    
+    expect(result).toBeNull();
+  });
+
+  test('should handle evaluate errors gracefully', async () => {
+    mockMemberCard.evaluate.mockRejectedValue(new Error('DOM Error'));
+
+    const result = await extractMemberData(mockPage, mockMemberCard);
+    
+    expect(result).toBeNull();
+  });
+});
+
+describe('delay and randomDelay', () => {
+  const { delay, randomDelay } = require('../scraper');
+
+  test('delay should resolve after specified time', async () => {
+    const start = Date.now();
+    await delay(100);
+    const end = Date.now();
+    expect(end - start).toBeGreaterThanOrEqual(90);
+  });
+
+  test('randomDelay should resolve within range', async () => {
+    const min = 50;
+    const max = 150;
+    const start = Date.now();
+    await randomDelay(min, max);
+    const end = Date.now();
+    expect(end - start).toBeGreaterThanOrEqual(min - 10);
+    // Note: max is harder to test strictly without mocking timers
+  });
+});
+
+describe('scrollThroughMembers', () => {
+  const { scrollThroughMembers, SELECTORS } = require('../scraper');
+  let mockPage;
+
+  beforeEach(() => {
+    mockPage = {
+      evaluate: jest.fn()
+    };
+    // Mock console.log to avoid cluttering test output
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    console.log.mockRestore();
+  });
+
+  test('should scroll until no more members are loaded', async () => {
+    // 1st call: initial count
+    // 2nd call: count after 1st scroll (down)
+    // 3rd call: count after 2nd scroll (down)
+    // 4th call: count after 3rd scroll (down) - no change
+    // 5th call: count after 4th scroll (down) - no change
+    // 6th call: count after 5th scroll (down) - no change -> switches direction
+    mockPage.evaluate
+      .mockResolvedValueOnce(10) // Initial
+      .mockResolvedValueOnce(20) // After scroll 1
+      .mockResolvedValueOnce(30) // After scroll 2
+      .mockResolvedValueOnce(30) // After scroll 3
+      .mockResolvedValueOnce(30) // After scroll 4
+      .mockResolvedValueOnce(30); // After scroll 5
+
+    // We'll limit maxScrolls to avoid long test
+    const scrollCount = await scrollThroughMembers(mockPage, { 
+      maxScrolls: 5, 
+      scrollDelay: 10,
+      minWaitAfterNoChange: 10 
     });
+    
+    expect(scrollCount).toBeGreaterThan(0);
+    expect(mockPage.evaluate).toHaveBeenCalledWith(expect.any(Function), SELECTORS.MEMBER_CARD);
+  });
+});
+
+describe('exportToJSON', () => {
+  const { exportToJSON } = require('../scraper');
+  const fs = require('fs');
+
+  test('should write correct data to file', async () => {
+    const members = [
+      { name: 'User 1', work: 'Job 1', profileUrl: 'url1' },
+      { name: 'User 2', work: 'Job 2', profileUrl: 'url2' }
+    ];
+    const outputPath = './test_members.json';
+    const groupUrl = 'https://facebook.com/groups/test';
+
+    const result = await exportToJSON(members, outputPath, groupUrl);
+    
+    expect(result).toBe(outputPath);
+    expect(fs.existsSync(outputPath)).toBe(true);
+    
+    const savedData = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+    expect(savedData.member_count).toBe(2);
+    expect(savedData.group_url).toBe(groupUrl);
+    expect(savedData.members).toEqual(members);
+    expect(savedData.scraped_at).toBeDefined();
+
+    // Cleanup
+    fs.unlinkSync(outputPath);
   });
 });

@@ -36,10 +36,9 @@ const CONFIG = {
  * Note: These selectors are for Facebook's mobile interface and may need
  * updates if Facebook changes their DOM structure.
  * 
- * Based on DOM inspection (2026-03-04):
- * - Member cards are containers with data-focusable and data-action-id attributes
- * - Names are in span.f1 inside ServerTextArea with color #1d2129
- * - Work details are in span.f1 inside ServerTextArea with color #4b4f56
+ * Based on DOM inspection (2026-03-05):
+ * - Member cards are containers with data-focusable, data-mcomponent="MContainer" and bg-s2 class
+ * - Names and work details are in span.f1 inside the card
  * 
  * @constant {Object} SELECTORS
  * @property {string} MEMBER_CARD - Selector for member card container
@@ -48,12 +47,12 @@ const CONFIG = {
  * @property {string} PROFILE_LINK - Selector for profile link element
  */
 const SELECTORS = {
-  MEMBER_CARD: '[data-focusable="true"][data-action-id]',
+  MEMBER_CARD: '[data-focusable="true"][data-mcomponent="MContainer"].bg-s2',
   NAME_CONTAINER: '[data-mcomponent="ServerTextArea"]',
-  NAME: '[data-mcomponent="ServerTextArea"]:first-of-type span.f1',
-  WORK_DETAILS: '[data-mcomponent="ServerTextArea"]:nth-of-type(2) span.f1',
-  PROFILE_LINK: '[data-focusable="true"][data-action-id]',
-  AVATAR_IMG: '[data-mcomponent="ServerImageArea"] img'
+  NAME: 'span.f1', // First span.f1 is name
+  WORK_DETAILS: 'span.f1', // Subsequent span.f1 are details
+  PROFILE_LINK: 'img', // We'll extract ID from img src
+  AVATAR_IMG: 'img'
 };
 
 /**
@@ -149,47 +148,31 @@ async function validateSession(sessionDir) {
  */
 async function extractMemberData(page, memberCard) {
   try {
-    // Extract all data from the member card
     const memberData = await memberCard.evaluate((card) => {
-      // Get all text spans with class f1 (Facebook's text class)
-      const textSpans = Array.from(card.querySelectorAll('span.f1'));
-
-      // First span is typically the name
-      const name = textSpans[0]?.textContent?.trim() || null;
-
-      // Second span is typically work/school info
-      const work = textSpans[1]?.textContent?.trim() || null;
-
-      // Find the profile link - look for anchor tags with href containing /profile.php or user IDs
-      let profileUrl = null;
+      // Find all spans within this specific card
+      const spans = Array.from(card.querySelectorAll('span.f1'));
+      const name = spans[0]?.textContent?.trim() || null;
+      // All other spans combined as work/details
+      const work = spans.slice(1).map(s => s.textContent.trim()).join(' | ') || null;
       
-      // Strategy 1: Look for any link that points to a Facebook profile
-      const allLinks = Array.from(card.querySelectorAll('a[href]'));
-      for (const link of allLinks) {
-        const href = link.href;
-        // Skip non-profile links
-        if (href.includes('facebook.com') && 
-            !href.includes('#') &&
-            !href.includes('privacy') &&
-            !href.includes('settings')) {
-          // Check if it looks like a profile URL
-          if (href.includes('/profile.php') || 
-              href.match(/facebook\.com\/\d+/) ||
-              href.match(/facebook\.com\/[a-zA-Z0-9.]+$/)) {
-            profileUrl = href;
-            break;
-          }
-        }
-      }
+      const img = card.querySelector('img');
+      const imageUrl = img?.src || null;
+      const dataImageId = img?.getAttribute('data-image-id');
+      let profileUrl = null;
 
-      // Strategy 2: If the card itself has a clickable area, get its onclick or data
-      if (!profileUrl) {
-        // Check for any data attributes that might contain user info
-        const userId = card.getAttribute('data-ownerid') || 
-                       card.getAttribute('data-id') ||
-                       card.getAttribute('data-entityid');
-        if (userId) {
-          profileUrl = `https://www.facebook.com/${userId}`;
+      if (dataImageId && dataImageId.length > 5 && !dataImageId.startsWith('-')) {
+        profileUrl = `https://www.facebook.com/profile.php?id=${dataImageId}`;
+      } else if (imageUrl) {
+        // Look for any long sequence of digits (13-18 digits) which is common for FBIDs
+        const digitMatch = imageUrl.match(/(\d{13,18})/);
+        if (digitMatch) {
+          profileUrl = `https://www.facebook.com/profile.php?id=${digitMatch[1]}`;
+        } else {
+          // Fallback to the previous logic for smaller IDs or different patterns
+          const match = imageUrl.match(/\/(\d+)_/);
+          if (match && match[1] && match[1].length >= 10) {
+            profileUrl = `https://www.facebook.com/profile.php?id=${match[1]}`;
+          }
         }
       }
 
@@ -253,94 +236,82 @@ async function randomDelay(min, max) {
  * @returns {Promise<number>} Total number of scroll actions performed
  */
 async function scrollThroughMembers(page, options = {}) {
-  const { maxScrolls = 200, scrollDelay = 2000, minWaitAfterNoChange = 8000 } = options;
+  const { maxScrolls = 500, scrollDelay = 3000 } = options;
   let scrollCount = 0;
   let lastMemberCount = 0;
   let consecutiveNoChange = 0;
-  const maxConsecutiveNoChange = 8;
-  let scrollDirection = 'down';
+  const maxConsecutiveNoChange = 6;
 
-  console.log('Starting member list scroll (up/down strategy)...');
-
-  // Get initial member count
-  lastMemberCount = await page.evaluate((selector) => {
-    return document.querySelectorAll(selector).length;
-  }, SELECTORS.MEMBER_CARD);
-
-  console.log(`Initial member count: ${lastMemberCount}`);
+  console.log('Starting member list scroll (smart strategy)...');
 
   while (scrollCount < maxScrolls) {
     scrollCount++;
     
-    if (scrollDirection === 'down') {
-      // Scroll to bottom
-      await page.evaluate(() => {
-        window.scrollTo(0, document.body.scrollHeight);
-      });
-      console.log(`Scroll ${scrollCount}/${maxScrolls}: Bottom (members: ${lastMemberCount})`);
-    } else {
-      // Scroll to top
-      await page.evaluate(() => {
-        window.scrollTo(0, 0);
-      });
-      console.log(`Scroll ${scrollCount}/${maxScrolls}: Top (members: ${lastMemberCount})`);
-    }
-
-    // Wait for content to load
+    // Scroll down incrementally
+    await page.evaluate(() => {
+      window.scrollBy(0, 1000);
+    });
     await delay(scrollDelay);
 
-    // Check member count
     const currentMemberCount = await page.evaluate((selector) => {
       return document.querySelectorAll(selector).length;
     }, SELECTORS.MEMBER_CARD);
 
     if (currentMemberCount > lastMemberCount) {
-      console.log(`  +${currentMemberCount - lastMemberCount} new members loaded`);
+      console.log(`Scroll ${scrollCount}/${maxScrolls}: Found ${currentMemberCount} members (+${currentMemberCount - lastMemberCount})`);
       consecutiveNoChange = 0;
       lastMemberCount = currentMemberCount;
-      // Keep scrolling in same direction when making progress
-    } else if (currentMemberCount === lastMemberCount) {
+    } else {
       consecutiveNoChange++;
+      console.log(`Scroll ${scrollCount}/${maxScrolls}: No change (${consecutiveNoChange}/${maxConsecutiveNoChange})`);
       
-      if (consecutiveNoChange >= 3 && scrollDirection === 'down') {
-        // Switch direction to try loading more
-        console.log(`  No new members, switching direction...`);
-        scrollDirection = 'up';
-        consecutiveNoChange = 0;
-      } else if (consecutiveNoChange >= 3 && scrollDirection === 'up') {
-        // Switch back to down
-        console.log(`  No new members, switching direction...`);
-        scrollDirection = 'down';
-        consecutiveNoChange = 0;
-      }
-      
-      if (consecutiveNoChange >= maxConsecutiveNoChange) {
-        // Wait longer before final check
-        console.log(`  Waiting ${minWaitAfterNoChange}ms for final check...`);
-        await delay(minWaitAfterNoChange);
+      // If stalled for a few cycles, look for "See all" or "Load more"
+      if (consecutiveNoChange >= 2) {
+        const clicked = await page.evaluate(() => {
+          // Look for "See all" buttons. In WebLite, these are often divs with role="button"
+          const buttons = Array.from(document.querySelectorAll('[role="button"], [data-focusable="true"]'));
+          
+          // Strategy: Find "See all" buttons and click them one by one if they are visible
+          const seeAllButtons = buttons.filter(b => {
+            const text = b.textContent.trim().toLowerCase();
+            return (text === 'see all' || text === 'see more' || text === 'load more') && 
+                   b.offsetParent !== null;
+          });
+
+          if (seeAllButtons.length > 0) {
+            // Click the one that's furthest down the page
+            const target = seeAllButtons[seeAllButtons.length - 1];
+            target.scrollIntoView();
+            target.click();
+            return true;
+          }
+          return false;
+        });
         
-        const finalCount = await page.evaluate((selector) => {
+        if (clicked) {
+          console.log(`  Clicked a load button, waiting...`);
+          await delay(5000);
+        }
+      }
+
+      if (consecutiveNoChange >= maxConsecutiveNoChange) {
+        console.log(`  Trying a larger scroll to trigger lazy loading...`);
+        await page.evaluate(() => window.scrollBy(0, 2000));
+        await delay(5000);
+        
+        const finalCheckCount = await page.evaluate((selector) => {
           return document.querySelectorAll(selector).length;
         }, SELECTORS.MEMBER_CARD);
         
-        if (finalCount === lastMemberCount) {
-          console.log('End of member list detected.');
+        if (finalCheckCount === lastMemberCount) {
+          console.log('End of list reached or stuck.');
           break;
-        } else {
-          console.log(`  +${finalCount - lastMemberCount} new members loaded after wait`);
-          lastMemberCount = finalCount;
-          consecutiveNoChange = 0;
         }
+        lastMemberCount = finalCheckCount;
+        consecutiveNoChange = 0;
       }
-    } else {
-      // Count decreased (shouldn't happen), reset
-      console.log(`  Member count decreased, resetting...`);
-      consecutiveNoChange = 0;
-      lastMemberCount = currentMemberCount;
     }
   }
-
-  console.log(`Scroll complete. Total members: ${lastMemberCount}`);
   return scrollCount;
 }
 
@@ -398,37 +369,181 @@ async function runScraper(groupUrl, options = {}) {
   const browser = await puppeteer.launch({
     headless: false,
     userDataDir: sessionDir,
-    args: ['--start-maximized']
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--start-maximized']
   });
 
   const members = [];
 
   try {
-    const page = await browser.newPage();
+    // Get all open pages and reuse the first one
+    const pages = await browser.pages();
+    const page = pages[0];
+    
+    // Close any other tabs
+    for (let i = 1; i < pages.length; i++) {
+      await pages[i].close();
+    }
+    
     await page.emulate(MOBILE_DEVICE);
 
     console.log('\nNavigating to group member list...');
     await page.goto(groupUrl, {
-      waitUntil: 'networkidle0',
-      timeout: 120000
+      waitUntil: 'domcontentloaded',
+      timeout: 60000
     });
+    
+    // Wait for body and then a fixed delay for dynamic content
+    await page.waitForSelector('body');
+    await delay(10000);
 
     console.log('✓ Page loaded');
 
-    // Scroll through member list
-    console.log('\nLoading all members...');
-    const scrollCount = await scrollThroughMembers(page, { maxScrolls });
-    console.log(`Completed ${scrollCount} scroll actions`);
+    // Remove unwanted panels to focus only on members
+    console.log('\nCleaning up page layout...');
+    await page.evaluate(() => {
+      const unwantedKeywords = [
+        'admins and moderators', 
+        'members with things in common', 
+        'pages', 
+        'new people and pages'
+      ];
+      
+      const containers = Array.from(document.querySelectorAll('[data-mcomponent="MContainer"]'));
+      containers.forEach(container => {
+        const text = container.textContent.toLowerCase();
+        // DON'T remove if it contains a load button
+        if (text.includes('see all') || text.includes('see more')) return;
 
-    // Extract member data
-    console.log('\nExtracting member data...');
-    const memberCards = await page.$$(SELECTORS.MEMBER_CARD);
-    console.log(`Found ${memberCards.length} member cards`);
+        if (unwantedKeywords.some(keyword => text.includes(keyword)) && 
+            !text.includes('recently joined')) { 
+          container.remove();
+        }
+      });
+    });
 
-    for (const card of memberCards) {
+    console.log('Starting iterative extraction...');
+    
+    // Iterative extraction loop
+    let consecutiveNoMember = 0;
+    const maxConsecutiveNoMember = 15;
+    
+    while (members.length < 10000) { // Safety limit
+      // Aggressively remove loaders in EVERY iteration
+      await page.evaluate(() => {
+        const loaderSpans = Array.from(document.querySelectorAll('span')).filter(s => s.textContent.includes('Loading'));
+        loaderSpans.forEach(span => {
+          // Find the container to remove - in WebLite it's usually an MContainer or similar
+          let container = span.closest('[data-mcomponent]') || span.parentElement;
+          if (container && container.tagName !== 'BODY') {
+            container.remove();
+          }
+        });
+      });
+
+      const memberCardSelector = '[data-focusable="true"][data-mcomponent="MContainer"].bg-s2';
+      const card = await page.$(memberCardSelector);
+      
+      if (!card) {
+        consecutiveNoMember++;
+        console.log(`\nNo member card found (${consecutiveNoMember}/${maxConsecutiveNoMember}). Checking for load buttons...`);
+        
+        // Strategy: 1. Click "See more" buttons if they appear
+        const clicked = await page.evaluate(() => {
+          const buttons = Array.from(document.querySelectorAll('[role="button"], [data-focusable="true"]'));
+          const moreBtn = buttons.find(b => {
+            const t = b.textContent.trim().toLowerCase();
+            return (t === 'see all' || t === 'see more' || t === 'load more') && b.offsetParent !== null;
+          });
+          if (moreBtn) {
+            moreBtn.scrollIntoView();
+            moreBtn.click();
+            return true;
+          }
+          return false;
+        });
+
+        if (clicked) {
+          console.log('  ✓ Clicked a "See more" button');
+          await delay(6000);
+          consecutiveNoMember = 0;
+          continue;
+        }
+
+        // Strategy: 2. Scroll down to trigger load if no buttons found
+        console.log('  Scrolling to trigger load...');
+        await page.evaluate(() => window.scrollBy(0, 1000));
+        await delay(4000);
+        
+        if (consecutiveNoMember >= maxConsecutiveNoMember) break;
+        continue;
+      }
+      
+      consecutiveNoMember = 0;
       const memberData = await extractMemberData(page, card);
-      if (memberData) {
+      
+      if (memberData && memberData.name) {
+        process.stdout.write(`\rExtracting member ${members.length + 1}: ${memberData.name.padEnd(30)}`);
+        
+        // Get real URL via click
+        try {
+          const originalUrl = await page.url();
+          // Find the avatar image which is a very reliable click target
+          const clickTarget = await card.$(SELECTORS.AVATAR_IMG).catch(() => card);
+          
+          if (clickTarget) {
+            await clickTarget.click();
+            
+            // Wait for URL to change to something that is NOT a members list
+            try {
+              await page.waitForFunction(
+                (oldUrl) => window.location.href !== oldUrl && !window.location.href.includes('/members'),
+                { timeout: 8000 },
+                originalUrl
+              );
+              
+              const finalUrl = await page.url();
+              if (finalUrl !== originalUrl && !finalUrl.includes('/members')) {
+                memberData.profileUrl = finalUrl;
+              }
+              
+              // Always try to go back if the URL changed
+              await page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => {});
+              await delay(1500);
+            } catch (waitErr) {}
+          }
+        } catch (err) {}
+        
         members.push(memberData);
+      }
+      
+      // DELETE the card so next one comes up
+      // We find the direct child of the scroller
+      await page.evaluate((el) => {
+        let scroller = el.closest('[data-type="vscroller"]') || el.closest('[scrollable="true"]') || el.parentElement;
+        if (!scroller) {
+          el.remove();
+          return;
+        }
+        
+        let toRemove = el;
+        while (toRemove.parentElement && toRemove.parentElement !== scroller) {
+          toRemove = toRemove.parentElement;
+        }
+        
+        // Remove spacers/fillers that might follow
+        let next = toRemove.nextElementSibling;
+        while (next && (next.textContent.trim() === '' || next.offsetHeight < 10)) {
+          let temp = next.nextElementSibling;
+          next.remove();
+          next = temp;
+        }
+        
+        toRemove.remove();
+      }, card);
+      
+      // Periodically export
+      if (members.length % 20 === 0) {
+        await exportToJSON(members, outputfile, groupUrl);
       }
     }
 
