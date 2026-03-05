@@ -34,6 +34,7 @@
 - **Async Pattern:** Async/await for all Puppeteer operations
 - **Browser:** Chromium (bundled with Puppeteer)
 - **Device Emulation:** Galaxy S8 mobile profile
+- **Extraction Strategy:** Iterative "extract-click-delete" for memory efficiency and URL verification
 
 ## Dependencies
 

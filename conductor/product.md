@@ -32,6 +32,8 @@ A Node.js/Puppeteer automation tool designed for individual users to extract mem
 - Mobile emulation (Galaxy S8) for accessing Facebook mobile site
 - Puppeteer for browser automation
 - User data directory for session persistence
+- Iterative extraction: Capture one member at a time and delete their DOM element to trigger list reflow
+- Verified profile URLs: Programmatically click member avatars to capture and verify real vanity URLs
 
 ## Success Criteria
 - Successfully extract member data from Facebook groups
