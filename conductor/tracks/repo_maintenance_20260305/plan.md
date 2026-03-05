@@ -13,6 +13,6 @@
 - [x] Task: Conductor - User Manual Verification 'Dependency Fix and Configuration' (Protocol in workflow.md) [b4a6a3e]
 
 ## Phase 3: Documentation
-- [ ] Task: Create a comprehensive `README.md` including sections for Prerequisites, Installation, Configuration, and Usage.
-- [ ] Task: Verify the correctness of the setup instructions by performing a clean installation (if possible) or a mock setup.
-- [ ] Task: Conductor - User Manual Verification 'Documentation' (Protocol in workflow.md)
+- [x] Task: Create a comprehensive `README.md` including sections for Prerequisites, Installation, Configuration, and Usage. [08bcbcc]
+- [x] Task: Verify the correctness of the setup instructions by performing a clean installation (if possible) or a mock setup. [08bcbcc]
+- [~] Task: Conductor - User Manual Verification 'Documentation' (Protocol in workflow.md)
