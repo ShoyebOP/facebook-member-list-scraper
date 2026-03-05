@@ -1,0 +1,25 @@
+# User profile / browser session data
+my_facebook_session/
+
+# Dependencies
+node_modules/
+
+# Coverage reports
+coverage/
+
+# NPM debug logs
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
