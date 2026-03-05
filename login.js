@@ -14,7 +14,13 @@ async function setupLogin() {
     args: ['--start-maximized'] // The window will still open, but the content will be phone-sized
   });
 
-  const page = await browser.newPage();
+  const pages = await browser.pages();
+  const page = pages[0] || await browser.newPage();
+  
+  // Close other tabs
+  for (let i = 1; i < pages.length; i++) {
+    await pages[i].close();
+  }
 
   // 2. Apply the mobile emulation BEFORE navigating
   await page.emulate(MOBILE_DEVICE);
