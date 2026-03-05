@@ -2,8 +2,8 @@
 
 ## Phase 1: Repository Cleanup and Optimization
 - [x] Task: Identify large files/directories in git history and confirm deletion targets. [7a75e75]
-- [~] Task: Remove `my_facebook_session/` and `node_modules/` from git history using `git filter-repo` or a similar tool.
-- [ ] Task: Run garbage collection (`git gc --prune=now --aggressive`) and verify repository size reduction.
+- [x] Task: Remove `my_facebook_session/` and `node_modules/` from git history using `git filter-repo` or a similar tool. [d69c387]
+- [x] Task: Run garbage collection (`git gc --prune=now --aggressive`) and verify repository size reduction. [d69c387]
 - [ ] Task: Conductor - User Manual Verification 'Repository Cleanup and Optimization' (Protocol in workflow.md)
 
 ## Phase 2: Dependency Fix and Configuration
