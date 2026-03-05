@@ -1,0 +1,33 @@
+{
+  "name": "facebook_member_list_scraper",
+  "version": "1.0.0",
+  "description": "Facebook member list scraper for lead generation",
+  "main": "scraper.js",
+  "scripts": {
+    "test": "CI=true jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "keywords": ["facebook", "scraper", "lead-generation"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "puppeteer": "^24.37.5"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.2.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coverageThreshold": {
+      "global": {
+        "branches": 80,
+        "functions": 80,
+        "lines": 80,
+        "statements": 80
+      }
+    }
+  }
+}
