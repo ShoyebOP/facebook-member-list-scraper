@@ -50,9 +50,9 @@
     - [x] Test scroll detection logic
     - [x] Test end-of-list detection
     - [x] Test progress tracking accuracy
-- [ ] Task: Conductor - User Manual Verification 'Core Scraping Logic' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Core Scraping Logic' (Protocol in workflow.md) (checkpoint: verified-iterative-strategy)
 
-## Phase 3: Data Export & Rate Limiting
+## Phase 3: Data Export & Rate Limiting [checkpoint: verified-iterative-strategy]
 
 - [x] Task: Implement JSON export function (631b19e)
     - [x] Create `exportToJSON(members, outputPath)` function
@@ -73,9 +73,9 @@
     - [x] Test delay function timing
     - [x] Test random delay generates varied results
     - [x] Verify delays are applied correctly in flow
-- [ ] Task: Conductor - User Manual Verification 'Data Export & Rate Limiting' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Data Export & Rate Limiting' (Protocol in workflow.md) (checkpoint: verified-profile-links)
 
-## Phase 4: Integration & CLI
+## Phase 4: Integration & CLI [checkpoint: iterative-verified-v1]
 
 - [x] Task: Create main orchestration function (631b19e)
     - [x] Create `runScraper(groupUrl)` function
@@ -91,7 +91,7 @@
     - [x] Test full scraper flow with mock data
     - [x] Test error scenarios (invalid URL, session expired)
     - [x] Test CLI argument handling
-- [ ] Task: Conductor - User Manual Verification 'Integration & CLI' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Integration & CLI' (Protocol in workflow.md) (checkpoint: iterative-verified-v1)
 
 ## Phase 5: Polish & Documentation
 
@@ -109,3 +109,6 @@
     - [ ] Optimize performance bottlenecks
     - [ ] Ensure >80% test coverage
 - [ ] Task: Conductor - User Manual Verification 'Polish & Documentation' (Protocol in workflow.md)
+
+## Phase: Review Fixes
+- [x] Task: Apply review suggestions cfcc536
